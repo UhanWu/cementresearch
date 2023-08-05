@@ -2,7 +2,14 @@
 
 
 ```{r}
-combinedata
+lmcor <- combinedata |>
+  select(!name) |>
+  mutate(year = as.double(year))
+
+factor_correlation <- cor(lmcor, use = "pairwise.complete.obs")
+threshold <- 0.7
+uncorrelated_factors <- colnames(factor_correlation)[apply(factor_correlation, 2, 
+                                                           function(col) all(abs(col) < threshold))]
 
 
 ```

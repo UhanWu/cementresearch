@@ -155,12 +155,16 @@ combinedata <- bind_cols(c(datacpi, dataunemploy, datagdp, dataoil,
          Clinker, housing, construction, lime, gasppi,
          petrocoal, workers, silica)
 setwd("~/Desktop/Rdata-science/cementresearch")
-write_csv(combinedata, "data/combinedata.csv")
+
+setwd("~/Desktop/Rdata-science/cementresearch")
+combinedata <- read.csv("data/combinedata.csv")
 
 ```
 
 ```{r}
-flexplot(concreteid~cpi + unemploy, data=combinedata, method="lm")
+
+combinedata
+flexplot(Cement~cpi + unemploy + gdp + oilprice + cementppi + population, data=combinedata, method="lm")
 ```
 
 
@@ -415,7 +419,70 @@ datagdp |>
 
 
 
+```{r}
+stepwisedata1<- combinedata |>
+   mutate(dum = if_else(year == c(2008,2009),1,0)) |>
+  mutate(year = as.double(year)) |>
+  filter(year < 2008) |>
+  select(!c(name, Clinker)) 
 
+
+intercept_only1 <- lm(Cement ~ 1, data=stepwisedata1)
+
+all1 <- lm(Cement ~ ., data=stepwisedata1)
+
+bothstep1 <- step(all1, direction='both', scope=formula(all), trace=0, steps = 10000)
+
+summary(bothstep1)
+
+```
+
+
+```{r}
+stepwisedata2 <- combinedata |>
+   mutate(dum = if_else(year == c(2008,2009),1,0)) |>
+  mutate(year = as.double(year)) |>
+  filter(year > 2009) |>
+  select(!c(name, year, Clinker)) 
+
+intercept_only2 <- lm(Cement ~ 1, data=stepwisedata2)
+
+#define model with all predictors
+all2 <- lm(Cement ~ cpi + unemploy + gdp + cementppi + population + 
+    concreteid + lime + gasppi + petrocoal + workers, data=stepwisedata2)
+
+#perform backward stepwise regression
+bothstep2 <- step(all2, direction='forward', scope=formula(all), trace=0, steps = 10000)
+
+#view results of backward stepwise regression
+
+summary(all2)
+
+#view final model
+backward$coefficients
+
+
+```
+
+```{r}
+stepwiseall <- combinedata |>
+  mutate(dum = if_else(year == c(2008,2009),1,0)) |>
+  mutate(year = as.double(year)) |>
+  select(!c(name, year, Clinker)) 
+
+intercept_all <- lm(Cement ~ 1, data=stepwiseall)
+
+#define model with all predictors
+all <- lm(Cement ~ ., data=stepwiseall)
+
+#perform backward stepwise regression
+bothstepall <- step(all, direction='both', scope=formula(all), trace=0, steps = 10000)
+
+#view results of backward stepwise regression
+
+summary(bothstepall)
+
+```
 
 
 
