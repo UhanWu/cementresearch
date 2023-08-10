@@ -519,16 +519,24 @@ library(car)
 library(plotly)
 library(leaps)
 library(lmtest)
+library(margins)
 
+
+setwd("~/Desktop/Rdata-science/cementresearch")
+combinedata <- read.csv("data/combinedata.csv")
+
+
+combinedata2 <- combinedata |>
+  select(!name)
 # Load your dataset (assuming your data is in a dataframe called 'data')
 # Make sure your data includes columns for the dependent variable and predictor variables
 
 # Filter out data points affected by the housing crisis (e.g., 2008-2009)
 data_filtered <- combinedata2 |>
-  select(!c(Clinker, concreteid, cementppi, gasppi, petrocoal, housing, year, cpi, workers, silica))
+  select(!c(Cement, concreteid, cementppi, gasppi, petrocoal, housing, year, cpi, workers, silica))
 
 # Perform stepwise regression on the filtered data
-stepwise_model <- step(lm(Cement ~ ., data = data_filtered))
+stepwise_model <- step(lm(Clinker ~ ., data = data_filtered))
 
 # Print the results of the stepwise regression
 summary(stepwise_model)
@@ -548,7 +556,18 @@ bptest(stepwise_model)
 resdulpdf<-density(stepwise_model$residuals)
 plot(resdulpdf,main='Residual pdf shape Plot',xlab='Residuals')
 
+plot(stepwise_model, which = 4)
 plot(stepwise_model, which = 5)
+
+marginal_effects <- margins(stepwise_model, variables = c("unemploy", "oilprice", "construction", "lime"))
+
+plot(marginal_effects)
+```
+```{r}
+standardized_model <- lm(formula = scale(Clinker) ~ scale(unemploy) + scale(oilprice) + 
+                           scale(construction) + scale(lime), 
+    data = data_filtered)
+summary(standardized_model)
 
 ```
 
@@ -584,6 +603,9 @@ summary(model)
 ```
 
 
+```{r}
+library(margins)
+```
 
 
 
