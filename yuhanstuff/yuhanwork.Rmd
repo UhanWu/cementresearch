@@ -44,25 +44,25 @@ Y axis: Total number of construction/projects in that region for all years
 # Correlation Analysis
 
 ```{r}
-
-#Import Datasets + Innitial Manipulation
 setwd("~/Desktop/Rdata-science/cementresearch")
+#Import Datasets + Innitial Manipulation
+
 datacpi <- read_csv("data/cpi.csv") |>
    pivot_longer(cols = `1960`:`2022`, 
                names_to = "years",
                values_to = "cpi") |>
   select(c(`Country Name`, years, cpi)) |>
   filter(`Country Name` == "United States") |>
-  filter(years >= 1998 & years < 2021)
+  mutate(year = as.double(years)) |>
+  filter(year >= 1968 & year <= 2021)|> # 1960
+  select(year, cpi)
 
-dataunemploy <- read_csv("data/unemploy.csv") |>
-   pivot_longer(cols = `1960`:`2022`, 
-               names_to = "years",
-               values_to = "unemploy") |>
-  select(c(`Country Name`, years, unemploy)) |>
-  filter(`Country Name` == "United States") |>
-  drop_na() |>
-  filter(years >= 1998 & years < 2021)
+
+dataunemploy <- read_csv("data/unrate.csv") |>
+  mutate(unemploy = as.double(UNRATE)) |>
+  mutate(year = as.double(str_sub(DATE, 0,4))) |>
+  summarise(unemploy = mean(unemploy), .by = year) |>
+  filter(year >= 1968 & year <= 2021) # 1960
 
 datagdp <- read_csv("data/gdpall.csv") |>
    pivot_longer(cols = `1960`:`2022`, 
@@ -71,78 +71,91 @@ datagdp <- read_csv("data/gdpall.csv") |>
   select(c(`Country Name`, years, gdp)) |>
   filter(`Country Name` == "United States") |>
   drop_na() |>
-  filter(years >= 1998 & years < 2021)
+  filter(years >= 1968 & years <= 2021) # 1960
 
-dataoil <- read_csv("data/oil.csv") |>
-  filter(!DCOILWTICO == ".") |>
-  mutate(oilprice = as.double(DCOILWTICO)) |>
+
+dataoil <- read_csv("data/crudeoilprice.csv") |>
+  filter(!WTISPLC == ".") |>
+  mutate(oilprice = as.double(WTISPLC)) |>
   mutate(year = as.double(str_sub(DATE, 0,4))) |>
   summarise(oilprice = mean(oilprice), .by = year) |>
-  filter(year >= 1998 & year < 2021)
+  filter(year >= 1968 & year <= 2021) # 1986
 
-datacement <- read_csv("data/cement.csv") |>
-  filter(!PCU32733132733106 == ".") |>
-  mutate(cementppi = as.double(PCU32733132733106)) |>
-  mutate(year = as.double(str_sub(DATE, 0,4))) |>
-  summarise(cementppi = mean(cementppi), .by = year) |>
-  filter(year >= 1998 & year < 2021)
 
 popdata <- read.csv("data/POPTHM.csv") |>
   filter(!POPTHM == ".") |>
   mutate(population = as.double(POPTHM)) |>
   mutate(year = as.double(str_sub(DATE, 0,4))) |>
   summarise(population = mean(population), .by = year) |>
-  filter(year >= 1998 & year < 2021) 
+  filter(year >= 1968 & year <= 2021) # 1959
 
-cementprod <- read.csv("data/IPG3273S.csv") |>
-  filter(!IPG3273S == ".") |>
-  mutate(concreteid = as.double(IPG3273S)) |>
-  mutate(year = as.double(str_sub(DATE, 0,4))) |>
-  summarise(concreteid = mean(concreteid), .by = year) |>
-  filter(year >= 1998 & year < 2021) 
 
-cementclinker <- read.csv("data/cementclinker.csv") |>
-  mutate(Cement = as.double(str_remove(Cement, ","))) |>
-  mutate(Clinker = as.double(str_remove(Clinker, ","))) 
+
+cementdatastuff <- read.csv("data/cementdatastuff.csv") |>
+  mutate(Cement = as.double(Cement)) |>
+  mutate(year = Year) |>
+  select(year, Cement) |>
+   filter(year >= 1968 & year <= 2021)
+
+
+workersdata <- read.csv("data/workers.csv") |>
+  mutate(year = as.double(str_sub(`DATE`, 0, 4)), workers = as.double(str_remove(`USCONS`, ","))) |>
+  filter(year >= 1968 & year <= 2021) |>
+  select(year, workers) # 1939
+
 
 housingcomplete <- read.csv("data/housingunit.csv") |>
-  mutate(year = `X1968`, housing = as.double(str_remove(`X1.319.80`, ","))) |>
-  filter(year >= 1998 & year < 2021) |>
-  select(year, housing)
+  mutate(year = Year, housing = as.double(str_remove(`Housing`, ","))) |>
+  filter(year >= 1968 & year <= 2021) |>
+  select(year, housing) # 1968
 
 setwd("~/Desktop/Rdata-science/cementresearch")
+gasdata <- read.csv("data/gasppi.csv") |>
+  mutate(year = as.double(str_sub(`DATE`, 0, 4)), gasppi = as.double(str_remove(`WPU0531`, ","))) |>
+  select(year, gasppi) |>
+  filter(year >= 1968 & year <= 2021) 
+
+```
+
+```{r}
+combinedata <- bind_cols(c(datacpi, dataunemploy, datagdp, dataoil, 
+                           popdata, cementdatastuff, workersdata, housingcomplete, gasdata)) |>
+  mutate(year = `year...1`) |>
+  select(year, cpi, unemploy, gdp, oilprice, 
+         population, Cement, housing, gasppi,
+       workers)
+
+write_csv(combinedata, "combinedata2.csv")
+```
+
+
+
+```{r}
+
+
 constructspending <- read.csv("data/construct.csv") |>
   mutate(year = as.double(str_sub(`DATE`, 0, 4)), construction = as.double(str_remove(`TLPBLCONS`, ","))) |>
   filter(year >= 1998 & year < 2021) |>
-  select(year, construction)
+  select(year, construction) # 1993
 
-
+setwd("~/Desktop/Rdata-science/cementresearch")
 limedata <- read.csv("data/lime.csv") |>
   mutate(year = as.double(Year), lime = as.double(str_remove(`Lime`, ","))) |>
   select(year, lime)
 
-setwd("~/Desktop/Rdata-science/cementresearch")
+
 silicadata <- read.csv("data/silica.csv") |>
   mutate(year = as.double(Year), silica = as.double(str_remove(`Silica`, ","))) |>
   select(year, silica)
 
 
-gasdata <- read.csv("data/gasppi.csv") |>
-  mutate(year = as.double(str_sub(`DATE`, 0, 4)), gasppi = as.double(str_remove(`WPU0531`, ","))) |>
-  select(year, gasppi) |>
-  filter(year >= 1998 & year < 2021) 
-
 
 petrodata <- read.csv("data/petrodata.csv") |>
   mutate(year = as.double(str_sub(`DATE`, 0, 4)), petrocoal = as.double(str_remove(`WPU058103`, ","))) |>
   filter(year >= 1998 & year < 2021) |>
-  select(year, petrocoal)
+  select(year, petrocoal) # 1986
 
-setwd("~/Desktop/Rdata-science/cementresearch")
-workersdata <- read.csv("data/workers.csv") |>
-  mutate(year = as.double(str_sub(`DATE`, 0, 4)), workers = as.double(str_remove(`USCONS`, ","))) |>
-  filter(year >= 1998 & year < 2021) |>
-  select(year, workers)
+
 
 
 combinedata <- bind_cols(c(datacpi, dataunemploy, datagdp, dataoil, 
@@ -154,7 +167,7 @@ combinedata <- bind_cols(c(datacpi, dataunemploy, datagdp, dataoil,
          cementppi, population, concreteid, Cement, 
          Clinker, housing, construction, lime, gasppi,
          petrocoal, workers, silica)
-setwd("~/Desktop/Rdata-science/cementresearch")
+
 
 setwd("~/Desktop/Rdata-science/cementresearch")
 combinedata <- read.csv("data/combinedata.csv")
@@ -164,7 +177,7 @@ combinedata <- read.csv("data/combinedata.csv")
 ```{r}
 
 combinedata
-flexplot(Cement~cpi + unemploy + gdp + oilprice + cementppi + population, data=combinedata, method="lm")
+flexplot(Cement~ cpi + unemploy + gdp + oilprice + cementppi + population, data=combinedata, method="lm")
 ```
 
 
