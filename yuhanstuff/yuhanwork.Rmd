@@ -124,8 +124,8 @@ combinedata <- bind_cols(c(datacpi, dataunemploy, datagdp, dataoil,
   select(year, cpi, unemploy, gdp, oilprice, 
          population, Cement, housing, gasppi,
        workers)
-
-write_csv(combinedata, "combinedata2.csv")
+setwd("~/Desktop/Rdata-science/cementresearch")
+write_csv(combinedata, "data/combinedata2.csv")
 ```
 
 
