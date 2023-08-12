@@ -10,8 +10,7 @@ library(urca)
 library(TTR)
 ```
 
-## Loading the data set 
-
+## Loading the data set
 
 ```{r}
 setwd("C:/Users/User/Desktop/R_Data_Science/cementresearch/")
@@ -27,9 +26,10 @@ gdp_annual_percent <- read_csv("data/gdp_annual_percent.csv") #https://fred.stlo
 
 ```
 
-
 # After new data set including 1968 - 2021
+
 VARS: cpi, unemploy, gdp, oilprice, population, Cement, housing, gasppi, workers
+
 ```{r}
 
 # ------- CPI ---------
@@ -82,7 +82,10 @@ adf.test(diff(df$workers)) #2nd order dif -> becomes stationary
 
 # ----------------------
 
-diff_1_vars <- df[,c("cpi","unemploy","oilprice","Cement","housing","workers")]
+# --------- TESTING WITH ALL VARIABLES -----------
+
+diff_1_vars <- df[,c("cpi","unemploy","oilprice","Cement","housing","workers", "gdp")]
+
 diff_1_vars <- ts(diff_1_vars, start = 1968, frequency = 1)
 diff_1_vars <- lapply(diff_1_vars,function(x) diff(x))
 
@@ -137,28 +140,103 @@ merged_data <- cbind(differenced_df,dummy_var)
 
 optimal_lag <- VARselect(merged_data,lag.max = 10) #gives AIC of 5, which is interesting...
 optimal_lag <- optimal_lag$selection[1]
-var_model <- VAR(merged_data, p = 1)
+var_model <- VAR(merged_data, p = 1, type = "none")
 
-forecast <- predict(var_model, n.ahead = 10)
+years_ahead <- 29
+forecast <- predict(var_model, n.ahead = years_ahead)
 par(mar = c(1, 1, 1, 1))
 plot(forecast)
 
-forecast_original <- cumsum(forecast$fcst$differenced_df.Cement) + df$Cement[1] #the original value in 1968
+
 ```
 
-## Plotting Historic and Forecast on a plot.ts
-
+## Plotting Results
 ```{r}
-full_years <- seq(1968, 2030, by = 1)
 
-full_ts <- zoo(NA, full_years)
+forecast_original <- cumsum(forecast$fcst$differenced_df.Cement[,1]) + df$Cement[length(df$Cement)]#the original value in 1968
 
-full_ts[time(ts(df$Cement, start = 1968, frequency = 1))] <- coredata(ts(df$Cement, start = 1968, frequency = 1))
+df1 <- data.frame(df$Cement)
+colnames(df1) <- "cement"
+df2 <- data.frame(forecast_original)
+colnames(df2) <- "cement"
 
-full_ts[time(ts(forecast$fcst$differenced_df.Cement[,1], start = 2021, frequency = 1))] <- coredata(ts(forecast$fcst$differenced_df.Cement[,1], start = 2021, frequency = 1))
+merged_temp <- rbind(df1, df2)
+years_temp <- data.frame(1968:(2021+years_ahead))
+colnames(years_temp) <- "years"
 
-full_ts_ts <- as.ts(full_ts)
+plot_final <- cbind(years_temp,merged_temp)
 
-plot.ts(full_ts_ts)
+plot_final |>
+  ggplot(aes(x = years, y = cement)) + 
+  geom_line() + 
+  geom_vline(xintercept = 2021, color = "red", linetype = "dashed") + 
+  xlab("Years") + ylab("Cement (million metric tons)") +
+  scale_y_continuous(labels = scales::comma_format(scale = 1e-3))
 ```
+
+
+
+## Testing with limited variables filtered based on correlation distrubtion matrix (to prevent cross-validation)
+```{r}
+# --------- TESTING WITH LIMITED VARIABLES ----------- cpi, housing, gdp , Cement, oilprice, gasppi
+
+diff_1_vars_lim <- df[,c("cpi","oilprice","Cement","housing","gdp")]
+diff_1_vars_lim <- ts(diff_1_vars_lim, start = 1968, frequency = 1)
+diff_1_vars_lim <- lapply(diff_1_vars_lim,function(x) diff(x))
+diff_2_vars_lim <- diff(ts(df$gasppi, start = 1968, frequency = 1),differences = 2)
+
+differenced_df_lim <- cbind(
+  as.data.frame(lapply(diff_1_vars_lim, function(x) window(x, start = 1970))), 
+  as.data.frame(window(diff_2_vars_lim,start = 1970)) #gasppi
+)
+
+differenced_df_lim <- ts(differenced_df_lim, start = 1970, frequency = 1)
+
+optimal_lag_lim <- VARselect(differenced_df_lim,lag.max = 10) #gives AIC of 5, which is interesting...
+# optimal_lag_lim <- optimal_lag$selection[1]
+var_model_lim <- VAR(differenced_df_lim, p = 1, type = "const")
+
+forecast_lim <- predict(var_model_lim, n.ahead = 20)
+par(mar = c(1, 1, 1, 1))
+plot(forecast_lim)
+
+forecast_original_lim <- cumsum(forecast_lim$fcst$Cement[,1]) + df$Cement[length(df$Cement)]#the original value in 1968
+# forecast_original_lim_lower_upper <-apply(forecast_lim$fcst$Cement[,2:3],2,cumsum) + df$Cement[length(df$Cement)]
+
+df1 <- data.frame(df$Cement)
+colnames(df1) <- "cement"
+df2 <- data.frame(forecast_original_lim)
+colnames(df2) <- "cement"
+
+merged_df_lim <- rbind(df1, df2)
+years_lim <- data.frame(1968:2041)
+colnames(years_lim) <- "years"
+
+plot_lim <- cbind(years_lim,merged_df_lim)
+
+plot_lim |>
+  ggplot(aes(x = years, y = cement)) + 
+  geom_line() + 
+  geom_vline(xintercept = 2021, color = "red", linetype = "dashed") + 
+  xlab("Years") + ylab("Cement (million metric tons)") +
+  scale_y_continuous(labels = scales::comma_format(scale = 1e-3))
+
+
+```
+
+
+## Model Diagnosis
+```{r}
+serial_test <- serial.test(var_model, lags.pt = optimal_lag) #passes this test because p-value > 0.05 (yes i meant to type greater)
+normality_test <- normality.test(var_model) #
+arch_test <- arch.test(var_model)
+
+diagnosis_df <- as.data.frame(differenced_df)
+
+for (col in colnames(diagnosis_df)) {
+  acf_plot <- Acf(diagnosis_df[[col]], main = paste("ACF -", col))
+  pacf_plot <- Pacf(diagnosis_df[[col]], main = paste("PACF -", col))
+}
+```
+
 
