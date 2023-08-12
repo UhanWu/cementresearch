@@ -43,7 +43,7 @@ Y axis: Total number of construction/projects in that region for all years
 
 # Correlation Analysis
 
-```{r}
+```{r warning=FALSE}
 setwd("~/Desktop/Rdata-science/cementresearch")
 #Import Datasets + Innitial Manipulation
 
@@ -115,17 +115,28 @@ gasdata <- read.csv("data/gasppi.csv") |>
   select(year, gasppi) |>
   filter(year >= 1968 & year <= 2021) 
 
+setwd("~/Desktop/Rdata-science/cementresearch")
+limedata <- read.csv("data/lime.csv") |>
+  mutate(year = as.double(Year), lime = as.double(str_remove(`Lime`, ","))) |>
+  select(year, lime)
+
+setwd("~/Desktop/Rdata-science/cementresearch")
+silicadata <- read.csv("data/silica.csv") |>
+  mutate(year = as.double(Year), silica = as.double(str_remove(`Silica`, ","))) |>
+  select(year, silica)
+
 ```
 
 ```{r}
 combinedata <- bind_cols(c(datacpi, dataunemploy, datagdp, dataoil, 
-                           popdata, cementdatastuff, workersdata, housingcomplete, gasdata)) |>
+                           popdata, cementdatastuff, workersdata, housingcomplete, gasdata,
+                           limedata, silicadata)) |>
   mutate(year = `year...1`) |>
   select(year, cpi, unemploy, gdp, oilprice, 
          population, Cement, housing, gasppi,
-       workers)
+       workers, lime, silica)
 setwd("~/Desktop/Rdata-science/cementresearch")
-write_csv(combinedata, "data/combinedata2.csv")
+write_csv(combinedata, "data/combinedata3.csv")
 ```
 
 
