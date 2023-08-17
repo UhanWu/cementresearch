@@ -15,10 +15,48 @@ library(gam)
 library(flexplot)
 ```
 
+```{r}
+setwd("~/Desktop/Rdata-science/cementresearch")
+combineold <- read.csv("data/combinedata.csv")
+
+modclink <- lm(Cement ~ Clinker, data = combineold)
+summary(modclink)
+
+
+
+```
+```{r}
+setwd("~/Desktop/Rdata-science/cementresearch")
+limestonedata <- read.csv("data/limestone.csv") |>
+  select(Year, limestone) |>
+  mutate(limestone = as.double(str_replace(limestone, ",", "")))
+
+limemerge <- bind_cols(limestonedata, limedata) |>
+  select(year, limestone, lime)
+
+limestone <- limemerge |>
+  mutate(limestone = limestone_interp) |>
+  select(year, limestone)
+
+```
 
 
 ```{r}
-rawdata <- read_excel("data/USGS_Aggregates_Data-1971-2021.xlsx", sheet = "Complete_1971_2021")
+library(ggplot2)
+
+# Sample time series data with missing values
+
+
+# Perform linear interpolation to fill in missing values
+limemerge$limestone_interp <- approx(limemerge$year, limemerge$limestone, method = "linear", n = length(limemerge$year))$y 
+
+
+lim
+limemerge |>
+ggplot(aes(x = year, y = limestone_interp)) +
+  geom_line() +
+  geom_point()
+
 
 ```
 
@@ -125,18 +163,20 @@ silicadata <- read.csv("data/silica.csv") |>
   mutate(year = as.double(Year), silica = as.double(str_remove(`Silica`, ","))) |>
   select(year, silica)
 
+
+
 ```
 
 ```{r}
 combinedata <- bind_cols(c(datacpi, dataunemploy, datagdp, dataoil, 
                            popdata, cementdatastuff, workersdata, housingcomplete, gasdata,
-                           limedata, silicadata)) |>
+                           limedata, silicadata, limestone)) |>
   mutate(year = `year...1`) |>
   select(year, cpi, unemploy, gdp, oilprice, 
          population, Cement, housing, gasppi,
-       workers, lime, silica)
+       workers, lime, silica, limestone)
 setwd("~/Desktop/Rdata-science/cementresearch")
-write_csv(combinedata, "data/combinedata3.csv")
+write_csv(combinedata, "data/combinedata4.csv")
 ```
 
 
@@ -181,14 +221,14 @@ combinedata <- bind_cols(c(datacpi, dataunemploy, datagdp, dataoil,
 
 
 setwd("~/Desktop/Rdata-science/cementresearch")
-combinedata <- read.csv("data/combinedata.csv")
+combinedata <- read.csv("data/combinedata3.csv")
 
 ```
 
 ```{r}
 
-combinedata
-flexplot(Cement~ cpi + unemploy + gdp + oilprice + cementppi + population, data=combinedata, method="lm")
+setwd("~/Desktop/Rdata-science/cementresearch")
+combinedata <- read.csv("data/combinedata3.csv")
 ```
 
 
@@ -197,7 +237,7 @@ flexplot(Cement~ cpi + unemploy + gdp + oilprice + cementppi + population, data=
 
 cordata <- combinedata |>
   mutate(year = as.double(year)) |>
-  select(!c(name,year)) 
+  select(!c(year)) 
 
 cordata2 <- combinedata |>
   mutate(year = as.double(year)) |>
@@ -547,23 +587,23 @@ library(margins)
 
 
 setwd("~/Desktop/Rdata-science/cementresearch")
-combinedata <- read.csv("data/combinedata.csv")
+combinedata <- read.csv("data/combinedata3.csv")
 
 
-combinedata2 <- combinedata |>
-  select(!name)
+combinedata2 <- combinedata 
 # Load your dataset (assuming your data is in a dataframe called 'data')
 # Make sure your data includes columns for the dependent variable and predictor variables
 
 # Filter out data points affected by the housing crisis (e.g., 2008-2009)
 data_filtered <- combinedata2 |>
-  select(!c(Cement, concreteid, cementppi, gasppi, petrocoal, housing, year, cpi, workers, silica))
+  select(!c(year))
 
 # Perform stepwise regression on the filtered data
-stepwise_model <- step(lm(Clinker ~ ., data = data_filtered))
+stepwise_model <- step(lm(Cement ~ ., data = data_filtered))
 
 # Print the results of the stepwise regression
 summary(stepwise_model)
+bptest(stepwise_model)
 
 # Check assumptions and diagnostic tests for the final model
 # For example, you can use the 'car' package for diagnostic tests
@@ -575,23 +615,58 @@ plot(stepwise_model, which = 2)
 plot(stepwise_model, which = 3) 
 
 
-bptest(stepwise_model)
+
 
 resdulpdf<-density(stepwise_model$residuals)
 plot(resdulpdf,main='Residual pdf shape Plot',xlab='Residuals')
 
+
+resdulcdf <- ecdf(stepwise_model$residuals)
+plot(resdulcdf,main='Residuals cdf ',xlab='Residuals')
+
 plot(stepwise_model, which = 4)
 plot(stepwise_model, which = 5)
 
-marginal_effects <- margins(stepwise_model, variables = c("unemploy", "oilprice", "construction", "lime"))
+marginal_effects <- margins(stepwise_model, variables = c("unemploy", "gdp", "housing", 
+                                                          "oilprice", "gasppi", "lime"))
 
 plot(marginal_effects)
+
 ```
+
 ```{r}
-standardized_model <- lm(formula = scale(Clinker) ~ scale(unemploy) + scale(oilprice) + 
-                           scale(construction) + scale(lime), 
+combineold <- read.csv("data/combinedata.csv")
+```
+
+
+
+```{r}
+standardized_model <- lm(formula = scale(Cement) ~ scale(unemploy) + scale(gdp) + 
+                           scale(housing) + scale(workers) + scale(lime),
     data = data_filtered)
 summary(standardized_model)
+
+
+residuals2 <- resid(standardized_model)
+plot(standardized_model, which = 1) 
+plot(standardized_model, which = 2)
+plot(standardized_model, which = 3) 
+
+
+bptest(standardized_model)
+
+resdulpdf2<-density(standardized_model$residuals)
+plot(resdulpdf,main='Residual pdf shape Plot',xlab='Residuals')
+
+plot(standardized_model, which = 4)
+plot(standardized_model, which = 5)
+
+marginal_effects1 <- margins(standardized_model, variables = c("unemploy", "gdp", "housing",
+                                                          "workers", "lime"))
+
+plot(marginal_effects1)
+
+
 
 ```
 
