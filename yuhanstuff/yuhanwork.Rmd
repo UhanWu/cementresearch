@@ -27,16 +27,11 @@ summary(modclink)
 ```
 ```{r}
 setwd("~/Desktop/Rdata-science/cementresearch")
-limestonedata <- read.csv("data/limestone.csv") |>
-  select(Year, limestone) |>
-  mutate(limestone = as.double(str_replace(limestone, ",", "")))
+limestonedata <- read.csv("data/limestone2.csv") |>
+  mutate(limestone = as.double(str_replace(`limestone.used.ONLY.in.portland..converted.to.Thousand.Metric.Tons.`, ",", ""))) |>
+  select(Year, limestone) 
 
-limemerge <- bind_cols(limestonedata, limedata) |>
-  select(year, limestone, lime)
 
-limestone <- limemerge |>
-  mutate(limestone = limestone_interp) |>
-  select(year, limestone)
 
 ```
 
@@ -170,13 +165,13 @@ silicadata <- read.csv("data/silica.csv") |>
 ```{r}
 combinedata <- bind_cols(c(datacpi, dataunemploy, datagdp, dataoil, 
                            popdata, cementdatastuff, workersdata, housingcomplete, gasdata,
-                           limedata, silicadata, limestone)) |>
+                           limedata, silicadata, limestonedata)) |>
   mutate(year = `year...1`) |>
   select(year, cpi, unemploy, gdp, oilprice, 
          population, Cement, housing, gasppi,
        workers, lime, silica, limestone)
 setwd("~/Desktop/Rdata-science/cementresearch")
-write_csv(combinedata, "data/combinedata4.csv")
+write_csv(combinedata, "data/combinedata5.csv")
 ```
 
 
@@ -228,7 +223,7 @@ combinedata <- read.csv("data/combinedata3.csv")
 ```{r}
 
 setwd("~/Desktop/Rdata-science/cementresearch")
-combinedata <- read.csv("data/combinedata3.csv")
+combinedata <- read.csv("data/combinedata4.csv")
 ```
 
 
@@ -587,7 +582,7 @@ library(margins)
 
 
 setwd("~/Desktop/Rdata-science/cementresearch")
-combinedata <- read.csv("data/combinedata3.csv")
+combinedata <- read.csv("data/combinedata4.csv")
 
 
 combinedata2 <- combinedata 
@@ -596,10 +591,10 @@ combinedata2 <- combinedata
 
 # Filter out data points affected by the housing crisis (e.g., 2008-2009)
 data_filtered <- combinedata2 |>
-  select(!c(year))
+  select(!c(year, gasppi, silica, lime))
 
 # Perform stepwise regression on the filtered data
-stepwise_model <- step(lm(Cement ~ ., data = data_filtered))
+stepwise_model <- lm(Cement ~ unemploy + gdp + workers + limestone + housing, data = data_filtered)
 
 # Print the results of the stepwise regression
 summary(stepwise_model)
