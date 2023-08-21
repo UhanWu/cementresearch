@@ -97,14 +97,13 @@ dataunemploy <- read_csv("data/unrate.csv") |>
   summarise(unemploy = mean(unemploy), .by = year) |>
   filter(year >= 1968 & year <= 2021) # 1960
 
-datagdp <- read_csv("data/gdpall.csv") |>
-   pivot_longer(cols = `1960`:`2022`, 
-               names_to = "years",
-               values_to = "gdp") |>
-  select(c(`Country Name`, years, gdp)) |>
-  filter(`Country Name` == "United States") |>
-  drop_na() |>
-  filter(years >= 1968 & years <= 2021) # 1960
+setwd("~/Desktop/Rdata-science/cementresearch")
+datagdp <- read_csv("data/gdp.csv") |>
+   filter(!GDPC1 == ".") |>
+  mutate(gdp = as.double(GDPC1)) |>
+  mutate(year = as.double(str_sub(DATE, 0,4))) |>
+  summarise(gdp = mean(gdp), .by = year) |>
+  filter(year >= 1968 & year <= 2021) # 1960
 
 
 dataoil <- read_csv("data/crudeoilprice.csv") |>
@@ -171,7 +170,7 @@ combinedata <- bind_cols(c(datacpi, dataunemploy, datagdp, dataoil,
          population, Cement, housing, gasppi,
        workers, lime, silica, limestone)
 setwd("~/Desktop/Rdata-science/cementresearch")
-write_csv(combinedata, "data/combinedata5.csv")
+write_csv(combinedata, "data/combinedata6.csv")
 ```
 
 
@@ -579,10 +578,12 @@ library(plotly)
 library(leaps)
 library(lmtest)
 library(margins)
+library(mgcv)
+library(rstanarm)
 
 
 setwd("~/Desktop/Rdata-science/cementresearch")
-combinedata <- read.csv("data/combinedata4.csv")
+combinedata <- read.csv("data/combinedata6.csv")
 
 
 combinedata2 <- combinedata 
@@ -591,10 +592,10 @@ combinedata2 <- combinedata
 
 # Filter out data points affected by the housing crisis (e.g., 2008-2009)
 data_filtered <- combinedata2 |>
-  select(!c(year, gasppi, silica, lime))
+  select(!c(year, lime, silica))
 
 # Perform stepwise regression on the filtered data
-stepwise_model <- lm(Cement ~ unemploy + gdp + workers + limestone + housing, data = data_filtered)
+stepwise_model <- step(lm(formula = Cement ~ ., data = data_filtered))
 
 # Print the results of the stepwise regression
 summary(stepwise_model)
@@ -622,10 +623,6 @@ plot(resdulcdf,main='Residuals cdf ',xlab='Residuals')
 plot(stepwise_model, which = 4)
 plot(stepwise_model, which = 5)
 
-marginal_effects <- margins(stepwise_model, variables = c("unemploy", "gdp", "housing", 
-                                                          "oilprice", "gasppi", "lime"))
-
-plot(marginal_effects)
 
 ```
 
@@ -637,7 +634,7 @@ combineold <- read.csv("data/combinedata.csv")
 
 ```{r}
 standardized_model <- lm(formula = scale(Cement) ~ scale(unemploy) + scale(gdp) + 
-                           scale(housing) + scale(workers) + scale(lime),
+                           scale(housing) + scale(limestone),
     data = data_filtered)
 summary(standardized_model)
 
@@ -656,10 +653,7 @@ plot(resdulpdf,main='Residual pdf shape Plot',xlab='Residuals')
 plot(standardized_model, which = 4)
 plot(standardized_model, which = 5)
 
-marginal_effects1 <- margins(standardized_model, variables = c("unemploy", "gdp", "housing",
-                                                          "workers", "lime"))
 
-plot(marginal_effects1)
 
 
 
