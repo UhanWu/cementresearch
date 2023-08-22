@@ -1,0 +1,283 @@
+---
+output:
+  pdf_document: default
+  html_document: default
+---
+```{r}
+library(tidyverse)
+library(vars)
+library(here)
+library(devtools)
+library(ggplot2)
+library(forecast)
+library(tseries)
+```
+
+## Loading the data set
+
+```{r}
+setwd("C:/Users/User/Desktop/R_Data_Science/cementresearch/")
+df <- read_csv("data/combinedata3.csv")
+
+setwd("C:/Users/User/Desktop/R_Data_Science/cementresearch/")
+old_df <- read_csv("data/combinedata.csv")
+write.csv(old_df, "old_data_1998_2020.csv")
+
+```
+
+# After new data set including 1968 - 2021
+
+VARS: cpi, unemploy, gdp, oilprice, population, Cement, housing, gasppi, workers
+
+```{r}
+
+# ------- CPI ---------
+
+adf.test(df$cpi) #not stationary
+adf.test(diff(df$cpi)) #1st order difference -> becomes stationary
+
+# ------- unemploy ---------
+
+adf.test(df$unemploy) #not stationary
+adf.test(diff(df$unemploy)) 
+
+# ------- GDP ---------
+
+adf.test(log(df$gdp)) # not stationary
+adf.test(diff(log(df$gdp),differences = 2)) #1st order difference -> becomes stationary
+
+
+# ------- oilprice ---------
+
+adf.test(df$oilprice) # not stationary
+adf.test(diff(df$oilprice)) #1st order difference -> becomes stationary
+
+# ------- population ---------
+
+adf.test(df$population) # not stationary
+adf.test(diff(df$population,differences = 3)) #3rd order difference -> becomes stationary
+
+plot.ts(ts(diff(df$population,differences = 3), start = 1968, frequency = 1))
+
+# ------- Cement ---------
+
+adf.test(df$Cement)# not stationary
+adf.test(diff(df$Cement)) #1st order dif -> becomes stationary
+
+# ------- housing ---------
+
+adf.test(df$housing) # not stationary
+adf.test(diff(df$housing)) #1st order dif -> becomes stationary
+
+# ------- gasppi ---------
+
+adf.test(df$gasppi) # not stationary
+adf.test(diff(df$gasppi,differences = 2)) #2nd order dif -> becomes stationary
+
+# ------- workers ---------
+
+adf.test(df$workers) # not stationary
+adf.test(diff(df$workers)) #2nd order dif -> becomes stationary
+
+# ------- lime  ---------
+
+adf.test(df$lime) # not stationary
+adf.test(diff(df$lime)) #2nd order dif -> becomes stationary
+
+# ------- silica ---------
+
+adf.test(df$silica) # not stationary
+adf.test(diff(df$silica,differences = 2)) #2nd order dif -> becomes stationary
+
+```
+
+## Testing with all variables 
+
+```{r}
+# --------- TESTING WITH ALL VARIABLES -----------
+
+diff_1_vars <- df[,c("cpi","unemploy","oilprice","Cement","housing","workers", "gdp","lime")]
+
+diff_1_vars <- ts(diff_1_vars, start = 1968, frequency = 1)
+diff_1_vars <- lapply(diff_1_vars,function(x) diff(x)) #reduced to 53 observations 
+
+diff_2_vars <- df[,c("silica","gasppi")]
+diff_2_vars <- ts(diff_2_vars, start = 1968, frequency = 1)
+diff_2_vars <- sapply(diff_2_vars, function(x) diff(x,differences = 2)) #reduced to 52 observations 
+
+diff_3_vars <- diff(ts(df[,"population"],start = 1968, frequency = 1),differences = 3) #reduced to 51 observations 
+
+differenced_df <- cbind(
+  as.data.frame(diff_1_vars)[-c(1,2),],
+  as.data.frame(diff_2_vars)[-1,],
+  as.data.frame(diff_3_vars)
+)
+
+# turning it back into a time series format (this is in rates)
+differenced_df <- ts(differenced_df, start = 1971, frequency = 1)
+
+
+## --- Affirming that all variables are now stationary ---- POSITIVE
+
+adf_results <- lapply(differenced_df, function(variable) {
+  adf_result <- adf.test(variable)
+  return(adf_result)
+})
+
+for (i in seq_along(adf_results)) {
+  variable_name <- names(differenced_df)[i]
+  p_value <- adf_results[[i]]$p.value
+  stationary_status <- ifelse(p_value < 0.05, "Stationary", "Non-Stationary")
+  
+  cat("Variable:", variable_name, "\n")
+  cat("P-Value:", p_value, "\n")
+  cat("Status:", stationary_status, "\n\n")
+}
+
+```
+
+## VAR STUFF
+
+```{r}
+
+dummy_var <- data.frame(year = 1971:2021) |>
+  mutate(value = case_when(year %in% c(2008,2009) ~ 1,TRUE ~ 0))
+
+dummy_var <- ts(dummy_var[,-1],start = 1971, frequency = 1)
+merged_data <- cbind(differenced_df,dummy_var)
+
+optimal_lag <- VARselect(merged_data,lag.max = 10) #gives AIC of 5, which is interesting...
+optimal_lag <- optimal_lag$selection[1]
+var_model <- VAR(merged_data, p = 1, type = "none") #I used a manual lag of 1
+
+years_ahead <- 29 #number of years to get to 2050
+forecast <- predict(var_model, n.ahead = years_ahead)
+par(mar = c(1, 1, 1, 1))
+plot(forecast)
+
+
+```
+
+## Plotting Results
+
+```{r}
+
+forecast_original <- cumsum(forecast$fcst$differenced_df.Cement[,1]) + df$Cement[length(df$Cement)]#the original value in 1968
+
+df1 <- data.frame(df$Cement)
+colnames(df1) <- "cement"
+df2 <- data.frame(forecast_original)
+colnames(df2) <- "cement"
+
+merged_temp <- rbind(df1, df2)
+years_temp <- data.frame(1968:(2021+years_ahead))
+colnames(years_temp) <- "years"
+
+plot_final <- cbind(years_temp,merged_temp)
+
+plot_final |>
+  ggplot(aes(x = years, y = cement)) + 
+  geom_line() + 
+  xlab("Years") + ylab("Cement (million metric tons)") +
+  scale_y_continuous(labels = scales::comma_format(scale = 1e-3)) + 
+  scale_x_continuous(breaks = seq(1970, 2050, by = 5)) +
+  geom_vline(xintercept = 2021, color = "red", linetype = "dashed")
+  
+
+```
+
+## Testing with limited variables filtered based on correlation distribution matrix (to prevent cross-validation)
+
+
+Variables considered: cpi, gdp, Cement (dependent var), housing, lime, gasppi
+
+outta here: oilprice, population, workers, silica
+```{r}
+# --------- TESTING WITH LIMITED VARIABLES ----------- cpi, housing, gdp , Cement, oilprice, gasppi
+
+
+df$gdp <- df$gdp/1000000000
+
+diff_1_vars_lim <- df[,c("cpi","Cement","housing","gdp","lime")]
+diff_1_vars_lim <- ts(diff_1_vars_lim, start = 1968, frequency = 1)
+diff_1_vars_lim <- lapply(diff_1_vars_lim,function(x) diff(x))
+diff_2_vars_lim <- diff(ts(df[,"gasppi"], start = 1968, frequency = 1),differences = 2)
+
+dummy_var <- data.frame(year = 1970:2021) |>
+  mutate(value = case_when(year %in% c(1973, 1974,1979,2008) ~ 1,TRUE ~ 0)) #includes 1973, 1974, and 1979, and 1980
+
+
+differenced_df_lim <- cbind(
+  as.data.frame(lapply(diff_1_vars_lim, function(x) window(x, start = 1970))), 
+  as.data.frame(lapply(diff_2_vars_lim, function(x) window(x, start = 1970)))
+  
+)
+
+differenced_df_lim <- ts(differenced_df_lim, start = 1970, frequency = 1)
+
+optimal_lag_lim <- VARselect(differenced_df_lim,lag.max = 7) #gives AIC of 5, which is interesting...
+# optimal_lag_lim <- optimal_lag$selection[1]
+var_model_lim <- VAR(differenced_df_lim, p = 1, type = "const")
+
+forecast_lim <- predict(var_model_lim, n.ahead = 29)
+par(mar = c(1, 1, 1, 1))
+plot(forecast_lim)
+
+forecast_original_lim <- cumsum(forecast_lim$fcst$Cement[,1]) + df$Cement[length(df$Cement)]#the original value in 2021
+# forecast_original_lim_lower_upper <-apply(forecast_lim$fcst$Cement[,2:3],2,cumsum) + df$Cement[length(df$Cement)]
+
+df1 <- data.frame(df$Cement)
+colnames(df1) <- "cement"
+df2 <- data.frame(forecast_original_lim)
+colnames(df2) <- "cement"
+
+merged_df_lim <- rbind(df1, df2)
+years_lim <- data.frame(1968:2050)
+colnames(years_lim) <- "years"
+
+plot_lim <- cbind(years_lim,merged_df_lim)
+
+plot_lim |>
+  ggplot(aes(x = years, y = cement)) + 
+  geom_line() + 
+  xlab("Years") + ylab("Cement (million metric tons)") +
+  scale_y_continuous(labels = scales::comma_format(scale = 1e-3)) +
+  scale_x_continuous(breaks = seq(1970, 2050, by = 5)) +
+  geom_vline(xintercept = 2021, color = "red", linetype = "dashed")
+
+```
+
+## Model Diagnosis for limited variables one (NOT FINAL YET)
+
+```{r}
+
+# Residual Analysis
+serial_test <- serial.test(var_model_lim, lags.pt = 1) #passes this test because p-value > 0.05 (yes i meant to type greater)
+
+# Normality Test
+residuals <- resid(var_model_lim)
+
+par( mfrow= c(3,2) )
+resdulpdf<-density(residuals[,"cpi"])
+plot(resdulpdf,main='CPI Residual shape Plot',xlab='CPI Residuals')
+resdulpdf<-density(residuals[,"gdp"])
+plot(resdulpdf,main='GDP Residual shape Plot',xlab='GDP Residuals')
+resdulpdf<-density(residuals[,"Cement"])
+plot(resdulpdf,main='Cement Residual shape Plot',xlab='Cement Residuals')
+resdulpdf<-density(residuals[,"housing"])
+plot(resdulpdf,main='Housing Residual shape Plot',xlab='HOusing Residuals')
+resdulpdf<-density(residuals[,"gasppi"])
+plot(resdulpdf,main='gasppi Residual shape Plot',xlab='gasppi Residuals')
+resdulpdf<-density(residuals[,"lime"])
+plot(resdulpdf,main='lime Residual shape Plot',xlab='lime Residuals')
+
+arch_test <- arch.test(var_model_lim)
+
+
+
+```
+
+
+
+
+
