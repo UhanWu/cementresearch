@@ -4,7 +4,7 @@ output: html_document
 date: "2023-08-16"
 ---
 
-```{r}
+```{r, echo= FALSE}
 library(tidyverse)
 library(vars)
 library(here)
@@ -13,55 +13,170 @@ library(ggplot2)
 library(forecast)
 library(tseries)
 library(stargazer)
+library(gridExtra)
+library(MASS)
 
 ```
 
 # load data set
-```{r}
+
+```{r, echo=TRUE}
 setwd("C:/Users/User/Desktop/R_Data_Science/cementresearch/")
-df <- read_csv("data/combinedata3.csv")
+df1 <- read_csv("data/combinedata6.csv") #includes real GDP
+# df <- read_csv("data/combinedata5.csv")
+
+total_housing <- read_csv("data/Total Number of Houses in US - Sheet1.csv")
+total_housing <- total_housing[-c(1,2),]
+total_housing <- total_housing[rev(row.names(total_housing)), ] #reverse year order; before starts from 2021 top, now rev() switches it
+
+df <- cbind(df1,total_housing$`All households`)
+
+colnames(df)[14] <- "tot_housing"
+
 ```
 
-# adf test
 ```{r}
+df_comb <- cbind(df[,c("year","gdp")],df_old$gdp)
+
+df_comb |>
+  ggplot(aes(x =year, y = df_comb$`df_old$gdp`/1000000000/df_comb$gdp)) + #nominal divded by real. In units of billions of dollars
+  geom_point() +
+  geom_smooth(method='lm') +
+  ggtitle("deflator over time")
+
+colnames(df_comb)[3] = "gdpnominal"
+
+summary(m.ols <- lm(gdp ~ year, data=df_comb))
+par(mfrow=c(2,2))
+plot(m.ols)
+
+bc <- boxcox(m.ols)
+
+lambda <- bc$x[which.max(bc$y)]
+
+new_model <- lm(((gdp^lambda-1)/lambda) ~ year,data = df_comb)
+par(mfrow=c(2,2))
+plot(new_model)
+
+
+```
+
+
+Variables considered: unnemploy, population, housing, limestone
+
+# adf test
+
+```{r}
+
+
 adf.test(df$unemploy) #not stationary
 adf.test(diff(df$unemploy)) 
 
-adf.test(df$gdp)
-adf.test(diff(df$gdp))
+adf.test(df$population)
+adf.test(diff(df$population,differences = 3))
 
 adf.test(df$housing)
 adf.test(diff(df$housing))
 
-adf.test(df$workers)
-adf.test(diff(df$workers))
+adf.test(df$limestone)
+adf.test(diff(df$limestone))
 
-adf.test(df$lime)
-adf.test(diff(df$lime))
+adf.test(df$Cement)
+adf.test(diff(df$Cement))
+
+adf.test(df$tot_housing)
+adf.test(diff(df$tot_housing))
+
+# ----------- SYNTHESIZE RESULTS -----------------
+
+# Create an empty data frame to store results
+variables <- c("unemploy", "population", "housing", "limestone", "Cement")
+adf_results <- data.frame(variable = character(0), 
+                          first_pvalue = numeric(0),
+                          first_stationarity = character(0),
+                          last_pvalue = numeric(0),
+                          last_stationarity = character(0),
+                          num_differences = integer(0))
+
+# Loop through each variable
+for (var in variables) {
+  data <- df[[var]]  # Replace with your actual data extraction
+  
+  # Perform ADF test for the initial series
+  adf_result_first <- adf.test(data)
+  p_value_first <- round(adf_result_first$p.value, digits = 3)
+  stationarity_first <- ifelse(p_value_first <= 0.05, "Stationary", "Non-Stationary")
+  
+  num_diff <- 0
+  p_value_last <- p_value_first
+  stationarity_last <- stationarity_first
+  
+  # Iterate until achieving stationarity
+  while (p_value_last > 0.05) {
+    num_diff <- num_diff + 1
+    data <- diff(data)
+    adf_result_last <- adf.test(data)
+    p_value_last <- round(adf_result_last$p.value, digits = 3)
+    stationarity_last <- ifelse(p_value_last <= 0.05, "Stationary", "Non-Stationary")
+  }
+  
+  # Append results to the dataframe
+  adf_results <- adf_results %>%
+    add_row(variable = var,
+            first_pvalue = p_value_first,
+            first_stationarity = stationarity_first,
+            last_pvalue = p_value_last,
+            last_stationarity = stationarity_last,
+            num_differences = num_diff)
+}
+
+# Display the rounded p-values results
+print(adf_results)
+
+df_bruh <- cbind(df[,c("year","gdp")],df2$gdp)
+
+df_bruh |>
+  ggplot(aes(x=year)) +
+  geom_line( aes(y=gdp)) + 
+  geom_line( aes(y=df2$gdp)) + # Divide by 10 to get the same range than the temperature
+    
+    scale_y_continuous(
+      
+      # Features of the first axis
+      name = "First Axis",
+      
+      # Add a second axis and specify its features
+      sec.axis = sec_axis(~.*coeff, name="Second Axis")
+  )
 ```
 
+# Testing with limited variables filtered based on correlation distribution matrix (to prevent cross-validation)
 
-## Testing with limited variables filtered based on correlation distribution matrix (to prevent cross-validation)
-
-
-Variables considered: unnemploy, gdp, housing, workers, lime
+Variables considered: unnemploy, population, housing, limestone, gdp
 
 ```{r}
 # --------- TESTING WITH LIMITED VARIABLES ----------- cpi, housing, gdp , Cement, oilprice, gasppi
 
+ #dividing by a billion
 
-df$gdp <- df$gdp/1000000000 #dividing by a billion
-
-diff_1_vars_lim <- df[,c("unemploy","Cement","housing","gdp","lime","workers")]
+diff_1_vars_lim <- df[,c("unemploy","Cement","limestone","housing","gdp")]
 diff_1_vars_lim <- ts(diff_1_vars_lim, start = 1968, frequency = 1)
-differenced_df_lim <- lapply(diff_1_vars_lim,function(x) diff(x))
+diff_1_vars_lim <- lapply(diff_1_vars_lim,function(x) diff(x))
+diff_3_vars_lim <- diff(ts(df[,"population"],start = 1968, frequency = 1),differences = 3)
 
-dummy_var <- data.frame(year = 1970:2021) |>
-  mutate(value = case_when(year %in% c(1973, 1974,1979,2008) ~ 1,TRUE ~ 0)) #Did not include dummy var 
+dummy_var <- data.frame(year = 1971:2021) |>
+  mutate(value = case_when(year %in% c(1974,2008,2009,2020) ~ 1,TRUE ~ 0))
+
+differenced_df_lim <- cbind(
+  as.data.frame(diff_1_vars_lim)[-c(1,2),],
+  as.data.frame(diff_3_vars_lim)
+)
+
+ #Did not include dummy var 
 
 differenced_df_lim <- as.data.frame(differenced_df_lim)
 
-optimal_lag_lim <- VARselect(differenced_df_lim,lag.max = 7) #7 is lag.max because 7^2 is 49 which is less than our 52 observations
+optimal_lag_lim <- VARselect(differenced_df_lim,lag.max = 5) #7 is lag.max because 7^2 is 49 which is less than our 52 observations
 optimal_lag_lim <- optimal_lag_lim$selection[3] #BIC / SC Test
 
 var_model_lim <- VAR(differenced_df_lim, p = 1, type = "const")
@@ -92,14 +207,40 @@ plot_lim |>
   scale_x_continuous(breaks = seq(1970, 2050, by = 5)) +
   geom_vline(xintercept = 2021, color = "red", linetype = "dashed")
 
+# ------------------
+
+# forecast_original_lim <- cumsum(forecast_lim$fcst$gdp[,1]) + df$gdp[length(df$gdp)]#the original value in 2021
+# # forecast_original_lim_lower_upper <-apply(forecast_lim$fcst$Cement[,2:3],2,cumsum) + df$Cement[length(df$Cement)]
+# 
+# df1 <- data.frame(df$gdp)
+# colnames(df1) <- "gdp"
+# df2 <- data.frame(forecast_original_lim)
+# colnames(df2) <- "gdp"
+# 
+# merged_df_lim <- rbind(df1, df2)
+# years_lim <- data.frame(1968:2050)
+# colnames(years_lim) <- "years"
+# 
+# plot_lim <- cbind(years_lim,merged_df_lim)
+# 
+# plot_lim |>
+#   ggplot(aes(x = years, y = gdp)) + 
+#   geom_line() + 
+#   xlab("Years") + ylab("gdp") +
+#   scale_x_continuous(breaks = seq(1970, 2050, by = 5)) +
+#   geom_vline(xintercept = 2021, color = "red", linetype = "dashed")
+
+
+
 ```
 
 # Diagnostic Tests
+
 ```{r}
 # Testing Autocorrelations
 residuals <- resid(var_model_lim)
 ljung_box_tests <- lapply(1:ncol(residuals), function(i) {
-  Box.test(residuals[, i], lag = 10, type = "Ljung-Box")
+  Box.test(residuals[, i], lag = 10, type = "Ljung-Box") #using a lag of 10
 })
 
 # Print the results for each variable
@@ -117,22 +258,23 @@ resdulpdf<-density(residuals[,"gdp"])
 plot(resdulpdf,main='GDP Residual shape Plot',xlab='GDP Residuals')
 resdulpdf<-density(residuals[,"housing"])
 plot(resdulpdf,main='housing Residual shape Plot',xlab='housing Residuals')
-resdulpdf<-density(residuals[,"workers"])
-plot(resdulpdf,main='workers Residual shape Plot',xlab='workers Residuals')
-resdulpdf<-density(residuals[,"lime"])
-plot(resdulpdf,main='lime Residual shape Plot',xlab='lime Residuals')
+resdulpdf<-density(residuals[,"limestone"])
+plot(resdulpdf,main='limestone Residual shape Plot',xlab='limestone Residuals')
+resdulpdf<-density(residuals[,"population"])
+plot(resdulpdf,main='population Residual shape Plot',xlab='population Residuals')
 
 normality.test(var_model_lim, multivariate.only = TRUE)
 
 
-#Heteroskedasity - PASS
+#Heteroskedasity - PASS, we fail to reject the null hypothesis so we conclude that there is not enough evidence to deduce heteroskedasity
 arch.test(var_model_lim)
 
 #Granger Causality - PASSS
-causality_test_result <- causality(var_model_lim, cause = c("unemploy", "gdp","housing","workers","lime"))
+causality_test_result <- causality(var_model_lim, cause = c("unemploy", "gdp","housing","population","limestone"))
 
+causality_test_result 
 #Impulse Response 
-irf_results <- irf(var_model_lim, n.ahead = 29, response = c("unemploy", "gdp","housing","workers","lime"))
+irf_results <- irf(var_model_lim, n.ahead = 29, response = c("unemploy", "gdp","housing","population","limestone"))
 
 plot(irf_results)
 
@@ -147,5 +289,84 @@ roots(var_model_lim,modulus = TRUE)
 summary(var_model_lim)
 stargazer(var_model_lim[["varresult"]], type = "text")
 
+plot(df$year,df$gdp)
+```
+```{r}
+diff_1_vars_lim <- df[,c("unemploy","Cement","tot_housing", "limestone","gdp")]
+diff_1_vars_lim <- ts(diff_1_vars_lim, start = 1968, frequency = 1)
+diff_1_vars_lim <- lapply(diff_1_vars_lim,function(x) diff(x))
+
+
+dummy_var <- data.frame(year = 1969:2021) |>
+  mutate(value = case_when(year %in% c(1982,1992,2009,2010) ~ 1,TRUE ~ 0)) #Did not include dummy var 
+
+
+differenced_df_lim <- cbind(
+  as.data.frame(diff_1_vars_lim)
+)
+
+optimal_lag_lim <- VARselect(differenced_df_lim,lag.max = 6) #7 is lag.max because 7^2 is 49 which is less than our 52 observations
+optimal_lag_lim <- optimal_lag_lim$selection[3] #BIC / SC Test
+
+var_model_lim <- VAR(differenced_df_lim, p = 1, type = "const")
+
+forecast_lim <- predict(var_model_lim, n.ahead = 29)
+par(mar = c(1, 1, 1, 1))
+plot(forecast_lim)
+
+forecast_original_lim <- cumsum(forecast_lim$fcst$Cement[,1]) + df$Cement[length(df$Cement)]#the original value in 2021
+# forecast_original_lim_lower_upper <-apply(forecast_lim$fcst$Cement[,2:3],2,cumsum) + df$Cement[length(df$Cement)]
+
+df1 <- data.frame(df$Cement)
+colnames(df1) <- "cement"
+df2 <- data.frame(forecast_original_lim)
+colnames(df2) <- "cement"
+
+merged_df_lim <- rbind(df1, df2)
+years_lim <- data.frame(1968:2050)
+colnames(years_lim) <- "years"
+
+plot_lim <- cbind(years_lim,merged_df_lim)
+
+plot_lim |>
+  ggplot(aes(x = years, y = cement)) + 
+  geom_line() + 
+  xlab("Years") + ylab("Cement (million metric tons)") +
+  scale_y_continuous(labels = scales::comma_format(scale = 1e-3)) +
+  scale_x_continuous(breaks = seq(1970, 2050, by = 5)) +
+  geom_vline(xintercept = 2021, color = "red", linetype = "dashed")
+
+# ----------------------------- GDP PROJECTION ----------------
+
+forecast_original_lim <- cumsum(forecast_lim$fcst$gdp[,1]) + df$gdp[length(df$gdp)]#the original value in 2021
+# forecast_original_lim_lower_upper <-apply(forecast_lim$fcst$Cement[,2:3],2,cumsum) + df$Cement[length(df$Cement)]
+
+df1 <- data.frame(df$gdp)
+colnames(df1) <- "gdp"
+df2 <- data.frame(forecast_original_lim)
+colnames(df2) <- "gdp"
+
+merged_df_lim <- rbind(df1, df2)
+years_lim <- data.frame(1968:2050)
+colnames(years_lim) <- "years"
+
+plot_lim <- cbind(years_lim,merged_df_lim)
+
+plot_lim |>
+  ggplot(aes(x = years, y = gdp)) +
+  geom_line() +
+  xlab("Years") + ylab("gdp") +
+  scale_x_continuous(breaks = seq(1970, 2050, by = 5)) +
+  geom_vline(xintercept = 2021, color = "red", linetype = "dashed")
+
+
+```
+
+```{r}
+df |>
+  ggplot(aes(x=year, y=housing)) +
+  geom_line() + 
+  geom_hline(yintercept = 158.8) + 
+  geom_hline(yintercept = 192.0)
 ```
 
