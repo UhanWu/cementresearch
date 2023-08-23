@@ -134,16 +134,29 @@ dataoil <- read_csv("data/crudeoilprice.csv") |>
   filter(year >= 1968 & year <= 2021) # 1986
 
 setwd("~/Desktop/Rdata-science/cementresearch")
-popdata <- read.csv("data/POPTHM.csv") |>
+popdata1 <- read.csv("data/POPTHM.csv") |>
   filter(!POPTHM == ".") |>
-  mutate(population = as.double(POPTHM)) |>
+  mutate(population1 = as.double(POPTHM)) |>
   mutate(year = as.double(str_sub(DATE, 0,4))) |>
-  summarise(population = mean(population), .by = year) |>
+  summarise(population1 = mean(population1), .by = year) |>
+  filter(year >= 1968 & year <= 2021) 
+
+setwd("~/Desktop/Rdata-science/cementresearch")
+popdata2 <- read.csv("data/POPTHM.csv") |>
+  filter(!POPTHM == ".") |>
+  mutate(population2 = as.double(POPTHM)) |>
+  mutate(year = as.double(str_sub(DATE, 0,4))) |>
+  summarise(population2 = mean(population2), .by = year) |>
   filter(year >= 1968 & year <= 2021) |> # 1959
-  mutate(new = lag(population)) |>
-  mutate(population = population - new)
+  mutate(new = lag(population2)) |>
+  mutate(population2 = population2 - new)
 
-
+setwd("~/Desktop/Rdata-science/cementresearch")
+oilconsumpdata <- read_csv("data/oilconsump.csv") |>
+  filter(Code == "USA") |>
+  mutate(oilconsump = `Oil per capita (kWh)`) |>
+  select(Year, oilconsump) |>
+  filter(Year >= 1968 & Year <= 2021) 
 
 cementdatastuff <- read.csv("data/cementdatastuff.csv") |>
   mutate(Cement = as.double(Cement)) |>
@@ -185,14 +198,14 @@ silicadata <- read.csv("data/silica.csv") |>
 
 ```{r}
 combinedata <- bind_cols(c(datacpi, dataunemploy, datagdp, dataoil, 
-                           popdata, cementdatastuff, workersdata, housingcomplete, gasdata,
-                           limedata, silicadata, limestonedata, housingtot, urbanpopdata)) |>
+                           popdata1, popdata2, cementdatastuff, workersdata, housingcomplete, gasdata,
+                           limedata, silicadata, limestonedata, housingtot, urbanpopdata, oilconsumpdata)) |>
   mutate(year = `year...1`) |>
   select(year, cpi, unemploy, gdp, oilprice, 
-         population, Cement, housing, gasppi,
-       workers, lime, silica, limestone, householdnum, urbanpop)
+         population1, population2, Cement, housing, gasppi,
+       workers, lime, silica, limestone, householdnum, urbanpop, oilconsump)
 setwd("~/Desktop/Rdata-science/cementresearch")
-write_csv(combinedata, "data/combinedata9.csv")
+write_csv(combinedata, "data/combinedata10.csv")
 
 
 ```
