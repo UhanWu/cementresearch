@@ -124,13 +124,15 @@ dataoil <- read_csv("data/crudeoilprice.csv") |>
   summarise(oilprice = mean(oilprice), .by = year) |>
   filter(year >= 1968 & year <= 2021) # 1986
 
-
+setwd("~/Desktop/Rdata-science/cementresearch")
 popdata <- read.csv("data/POPTHM.csv") |>
   filter(!POPTHM == ".") |>
   mutate(population = as.double(POPTHM)) |>
   mutate(year = as.double(str_sub(DATE, 0,4))) |>
   summarise(population = mean(population), .by = year) |>
-  filter(year >= 1968 & year <= 2021) # 1959
+  filter(year >= 1968 & year <= 2021) |> # 1959
+  mutate(new = lag(population)) |>
+  mutate(population = population - new)
 
 
 
@@ -181,7 +183,7 @@ combinedata <- bind_cols(c(datacpi, dataunemploy, datagdp, dataoil,
          population, Cement, housing, gasppi,
        workers, lime, silica, limestone, householdnum)
 setwd("~/Desktop/Rdata-science/cementresearch")
-write_csv(combinedata, "data/combinedata7.csv")
+write_csv(combinedata, "data/combinedata8.csv")
 
 
 ```
@@ -599,7 +601,7 @@ setwd("~/Desktop/Rdata-science/cementresearch")
 combinedata4 <- read.csv("data/combinedata5.csv")
 
 
-combinedata <- read.csv("data/combinedata7.csv")
+combinedata <- read.csv("data/combinedata8.csv")
 
 gdpnominal <- combinedata4 |>
   mutate(gdpnominal = gdp) |>
@@ -614,7 +616,7 @@ combinedata2 <- combinedata |>
 # Filter out data points affected by the housing crisis (e.g., 2008-2009)
 data_filtered <- combinedata2 |>
   drop_na() |>
-  select(!c(year, lime, gasppi, silica, gdpnominal, gdp))
+  select(!c(year, lime, gasppi, silica, gdpnominal, population))
 
 # Perform stepwise regression on the filtered data
 stepwise_model <- step(lm(formula = Cement ~ ., data = data_filtered))
