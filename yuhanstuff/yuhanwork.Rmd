@@ -98,6 +98,17 @@ dataunemploy <- read_csv("data/unrate.csv") |>
   filter(year >= 1968 & year <= 2021) # 1960
 
 setwd("~/Desktop/Rdata-science/cementresearch")
+housingtot <- read_csv("data/tothouses.csv") |>
+  drop_na() |>
+  mutate(householdnum = `All households`) |>
+  select(Year, householdnum) |>
+  arrange(Year) |>
+  mutate(new = lag(householdnum)) |>
+  mutate(householdnum = householdnum - new)
+  
+
+
+
 datagdp <- read_csv("data/gdp.csv") |>
    filter(!GDPC1 == ".") |>
   mutate(gdp = as.double(GDPC1)) |>
@@ -164,13 +175,15 @@ silicadata <- read.csv("data/silica.csv") |>
 ```{r}
 combinedata <- bind_cols(c(datacpi, dataunemploy, datagdp, dataoil, 
                            popdata, cementdatastuff, workersdata, housingcomplete, gasdata,
-                           limedata, silicadata, limestonedata)) |>
+                           limedata, silicadata, limestonedata, housingtot)) |>
   mutate(year = `year...1`) |>
   select(year, cpi, unemploy, gdp, oilprice, 
          population, Cement, housing, gasppi,
-       workers, lime, silica, limestone)
+       workers, lime, silica, limestone, householdnum)
 setwd("~/Desktop/Rdata-science/cementresearch")
-write_csv(combinedata, "data/combinedata6.csv")
+write_csv(combinedata, "data/combinedata7.csv")
+
+
 ```
 
 
@@ -583,20 +596,31 @@ library(rstanarm)
 
 
 setwd("~/Desktop/Rdata-science/cementresearch")
-combinedata <- read.csv("data/combinedata6.csv")
+combinedata4 <- read.csv("data/combinedata5.csv")
 
 
-combinedata2 <- combinedata 
+combinedata <- read.csv("data/combinedata7.csv")
+
+gdpnominal <- combinedata4 |>
+  mutate(gdpnominal = gdp) |>
+  select(gdpnominal) |>
+  pull()
+
+combinedata2 <- combinedata |>
+  mutate(gdpnominal = gdpnominal)
 # Load your dataset (assuming your data is in a dataframe called 'data')
 # Make sure your data includes columns for the dependent variable and predictor variables
 
 # Filter out data points affected by the housing crisis (e.g., 2008-2009)
 data_filtered <- combinedata2 |>
-  select(!c(year, lime, silica))
+  drop_na() |>
+  select(!c(year, lime, gasppi, silica, gdpnominal, gdp))
 
 # Perform stepwise regression on the filtered data
 stepwise_model <- step(lm(formula = Cement ~ ., data = data_filtered))
 
+# glm_model <- stan_glm(formula = Cement ~ unemploy + gdp + workers + limestone, data = data_filtered, 
+#                       iter = 5000)
 # Print the results of the stepwise regression
 summary(stepwise_model)
 bptest(stepwise_model)
@@ -611,7 +635,17 @@ plot(stepwise_model, which = 2)
 plot(stepwise_model, which = 3) 
 
 
-
+# newdata <- tibble(unemploy = 3, gdp = 36000, workers = 130000, limestone = 150000)
+# predict <- posterior_epred(glm_model, newdata =  newdata) |>
+#   as_tibble() |>
+#   mutate(prediction = `1`)  
+# 
+# mean(predict$prediction)
+# 
+# predict |> 
+#   ggplot(aes(x = prediction)) +
+#     geom_histogram(aes(y = after_stat(count/sum(count))),
+#                    bins = 100)
 
 resdulpdf<-density(stepwise_model$residuals)
 plot(resdulpdf,main='Residual pdf shape Plot',xlab='Residuals')
@@ -624,10 +658,27 @@ plot(stepwise_model, which = 4)
 plot(stepwise_model, which = 5)
 
 
+
 ```
 
 ```{r}
-combineold <- read.csv("data/combinedata.csv")
+gdpmodel <- lm(gdpnominal ~ gdp, data = combinedata2)
+
+deflatordata <- combinedata2 |>
+  mutate(deflator = gdpnominal/(gdp*1000000000))
+
+modelgdp <- stan_glm(gdp ~ year, data = deflatordata, refresh = 0)
+
+gdpdeflator <- posterior_predict(modelgdp, newdata = tibble(year = 2050)) |>
+  as_tibble() |>
+  mutate(prediction = `1`) 
+
+lmmodel <- lm(stan_glm(gdp ~ year, data = deflatordata, refresh = 0))
+
+summary(lmmodel)
+              
+mean(gdpdeflator$prediction)
+
 ```
 
 
