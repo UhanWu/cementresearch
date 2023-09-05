@@ -496,6 +496,9 @@ library(lmtest)
 library(margins)
 library(mgcv)
 library(rstanarm)
+library(palmerpenguins)
+library(vars)
+
 
 
 
@@ -515,10 +518,11 @@ combinedata2 <- combinedata |>
 # Filter out data points affected by the housing crisis (e.g., 2008-2009)
 data_filtered <- combinedata2 |>
   drop_na() |>
-  select(!c(year, limestone))
+  select(!c(year,limestone))
 
 # Perform stepwise regression on the filtered data
-stepwise_model <- step(lm(formula = Cement ~ ., family = gaussian, data = data_filtered))
+stepwise_model <- step(lm(formula = Cement ~ ., family = gaussian, data = data_filtered), 
+                          direction = c("backward"), k = log(54))
 
 # glm_model <- stan_glm(formula = Cement ~ unemploy + gdp + workers + limestone, data = data_filtered, 
 #                       iter = 5000)
@@ -531,21 +535,26 @@ bptest(stepwise_model)
 # You can also visualize the residuals to assess model performance
 
 residuals <- resid(stepwise_model)
+
+par(mfrow = c(2,2))
 plot(stepwise_model, which = 1) 
 plot(stepwise_model, which = 2)
 plot(stepwise_model, which = 3) 
-
+plot(stepwise_model, which = 5)
 
 resdulpdf<-density(stepwise_model$residuals)
 plot(resdulpdf,main='Residual pdf shape Plot',xlab='Residuals')
 
 
 resdulcdf <- ecdf(stepwise_model$residuals)
+par(mfrow = c(1,2))
+plot(resdulpdf,main='Residual pdf shape Plot',xlab='Residuals')
 plot(resdulcdf,main='Residuals cdf ',xlab='Residuals')
 
 plot(stepwise_model, which = 4)
-plot(stepwise_model, which = 5)
 
+
+vif(stepwise_model)
 #unemploy
 unemploytest = -1.043e+03*(3.7) # 3-7%, 3.7%
 
@@ -563,6 +572,16 @@ limestonetest = 3.922e-01*(163610)
 
 
 unemploytest + gdptest + housingtest + limestonetest + 2.465e+04
+
+datavariables <- data_filtered |>
+  select(Cement, unemploy, gdp, housing)
+
+# Assuming your factors are in a data frame or matrix named 'factors'
+result_johansen <- ca.jo(datavariables, type = "trace", K = 4)  # Adjust K as needed
+
+# Print the results
+summary(result_johansen)
+
 
 ```
 
