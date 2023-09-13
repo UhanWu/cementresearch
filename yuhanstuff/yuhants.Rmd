@@ -122,3 +122,37 @@ print_results("x8", results_x8) # Clinker
 
 ```
 
+
+
+
+
+```{r}
+# Load necessary libraries
+library(ggplot2)
+
+# Define gravitational field parameters
+G <- 6.67430e-11  # Gravitational constant
+M <- 5.972e24     # Mass of the Earth
+
+# Create a function to calculate gravitational field strength at a point
+gravity_field <- function(x, y) {
+  r_squared <- x^2 + y^2
+  field_strength <- G * M / r_squared
+  return(field_strength)
+}
+
+# Create a grid of points
+x <- seq(-10, 10, length.out = 100)
+y <- seq(-10, 10, length.out = 100)
+grid <- expand.grid(x = x, y = y)
+
+# Calculate gravitational field strength at each point
+grid$field_strength <- gravity_field(grid$x, grid$y)
+
+# Create a contour plot to visualize the field
+ggplot(grid, aes(x = x, y = y, z = field_strength)) +
+  geom_contour() +
+  labs(title = "Gravitational Field around a Mass")
+
+```
+
